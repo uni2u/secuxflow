@@ -1,0 +1,33 @@
+[package]
+name = "secuxflow"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "eBPF-XDP based network security system with WASM inspection modules"
+
+[dependencies]
+# eBPF/XDP 관련 - Ubuntu 22.04와 호환성 검증된 버전
+libbpf-rs = "0.19.1"  # 안정적인 버전
+libbpf-sys = "0.8.0"  # libbpf-rs 0.19.1과 호환되는 버전
+
+# XDP 관련
+xdp-cpumap = "0.2.0"  # XDP CPU map 기능
+
+# WASM 관련 - 안정 버전
+wasmtime = "6.0.1"  # Ubuntu 22.04와 호환성 검증된 버전
+wasmtime-wasi = "6.0.1"
+
+# CLI 관련
+clap = { version = "4.2.7", features = ["derive"] }  # 안정 버전
+
+# 유틸리티
+anyhow = "1.0.70"  # 오류 처리
+log = "0.4.17"
+env_logger = "0.10.0"
+serde = { version = "1.0.160", features = ["derive"] }
+serde_json = "1.0.96"
+tokio = { version = "1.28.0", features = ["rt", "rt-multi-thread", "macros", "time"] }  # 필요한 기능만 선택
+
+[build-dependencies]
+# eBPF 프로그램 빌드를 위한 도구
+libbpf-cargo = "0.19.0"  # libbpf-rs와 호환되는 버전
