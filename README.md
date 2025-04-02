@@ -104,6 +104,12 @@ secuxflow-cli status stats --interval 5s
 
 ## Building and Running
 [TBD]
+
+```
+sudo apt update
+sudo apt install -y build-essential llvm clang libelf-dev zlib1g-dev linux-headers-$(uname -r)
+```
+
 Detailed setup instructions will be added as development progresses.
 
 ## License
