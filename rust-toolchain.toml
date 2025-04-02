@@ -1,0 +1,2 @@
+[toolchain]
+channel = "1.70.0"  # Ubuntu 22.04와 호환성이 좋은 안정 버전
