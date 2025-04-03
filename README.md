@@ -105,9 +105,16 @@ secuxflow-cli status stats --interval 5s
 ## Building and Running
 [TBD]
 
-```
+### Install Ubuntu Packages
+```bash
 sudo apt update
-sudo apt install -y build-essential llvm clang libelf-dev zlib1g-dev linux-headers-$(uname -r)
+sudo apt install -y build-essential llvm clang libelf-dev zlib1g-dev bpftool linux-headers-$(uname -r)
+```
+
+### Rust
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
 ```
 
 Detailed setup instructions will be added as development progresses.
