@@ -9,7 +9,7 @@ use crate::xdp::XdpFilter;
 use crate::wasm::WasmInspector;
 
 #[derive(Parser)]
-#[clap(name = "secuxflow-poc", about = "SecuXFlow PoC - XDP Filter with WASM Security Module")]
+#[clap(name = "secuxflow", about = "SecuXFlow - XDP Filter with WASM Security Module")]
 pub struct Cli {
     #[clap(subcommand)]
     command: Option<Commands>,
