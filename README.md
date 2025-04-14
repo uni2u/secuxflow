@@ -100,7 +100,24 @@ secuxflow-cli status stats --interval 5s
 - Admin-controlled rule generation based on WASM module analysis
 
 ## Project Structure
-[TBD]
+```
+secuxflow/
+├── Cargo.toml
+├── rust-toolchain.toml
+├── README.md
+├── build.rs
+├── src/
+│   ├── main.rs
+│   ├── cli.rs
+│   ├── xdp.rs
+│   ├── wasm.rs
+│   └── chain.rs
+├── bpf/
+│   ├── xdp_filter.c
+│   └── common.h
+└── wasm_modules/
+    └── basic_inspect.wasm   # 새로 추가할 파일
+```
 
 ## Building and Running
 [TBD]
@@ -115,6 +132,18 @@ sudo apt install -y build-essential llvm clang libelf-dev zlib1g-dev bpftool lin
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
+```
+
+### Build and Running
+```bash
+# develop mode build
+cargo build
+
+# release mode build
+cargo build --release
+
+# run
+./target/debug/secuxflow
 ```
 
 Detailed setup instructions will be added as development progresses.
