@@ -66,7 +66,7 @@ impl ServiceChain {
         let mut xdp = self.xdp_filter.lock().unwrap();
         
         // 소스 IP 기반 필터링 룰 추가
-        xdp.add_rule(
+        match xdp.add_rule(
             &packet.src_ip,
             Some(&packet.dst_ip),
             packet.dst_port,
@@ -76,12 +76,17 @@ impl ServiceChain {
                 _ => "any"
             }),
             action
-        )?;
-        
-        info!("XDP 필터링 룰 업데이트: {} -> {} ({})", 
-            packet.src_ip, packet.dst_ip, action);
-        
-        Ok(())
+        ) {
+            Ok(rule_id) => {
+                info!("XDP 필터링 룰 업데이트: {} -> {} ({}), ID: {}", 
+                    packet.src_ip, packet.dst_ip, action, rule_id);
+                Ok(())
+            },
+            Err(e) => {
+                error!("XDP 필터링 룰 업데이트 실패: {}", e);
+                Err(e)
+            }
+        }
     }
 }
 
