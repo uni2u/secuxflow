@@ -113,13 +113,30 @@ secuxflow/
 ### Install Ubuntu Packages
 ```bash
 sudo apt update
-sudo apt install -y build-essential llvm clang libelf-dev zlib1g-dev bpftool linux-headers-$(uname -r)
+sudo apt install -y build-essential llvm clang libelf-dev zlib1g-dev bpftool linux-headers-$(uname -r) wabt
 ```
 
 ### Rust
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
+```
+
+### Configuration Scripts
+```bash
+chmod +x scripts/compile_wasm.sh
+chmod +x scripts/setup_dev_env.sh
+chmod +x scripts/test.sh
+```
+
+### Auto Environments
+```bash
+./scripts/setup_dev_env.sh
+```
+
+### Compile WAT
+```bash
+./scripts/compile_wasm.sh
 ```
 
 ### Build and Running
@@ -132,6 +149,11 @@ cargo build --release
 
 # run
 ./target/debug/secuxflow
+```
+
+### Test
+```bash
+./scripts/test.sh
 ```
 
 Detailed setup instructions will be added as development progresses.
