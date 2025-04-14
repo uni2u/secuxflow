@@ -1,0 +1,27 @@
+# Rust 빌드 산출물
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# eBPF 산출물
+*.o
+*.ll
+*.skel.rs
+
+# WASM 컴파일 산출물
+*.wasm
+# 단, 기본 검사 모듈은 제외
+!wasm_modules/basic_inspect.wasm
+
+# 편집기 설정
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 로그 파일
+*.log
+
+# 운영체제 파일
+.DS_Store
+Thumbs.db
