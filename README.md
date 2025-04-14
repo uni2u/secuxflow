@@ -45,50 +45,38 @@ SecuXFlow provides a command-line interface for managing XDP filtering rules and
 
 ### Basic Commands
 ```
-secuxflow-cli [COMMAND] [OPTIONS]
+secuxflow [COMMAND] [OPTIONS]
 ```
 
 ### Rule Management
 #### Add a new XDP filtering rule:
 ```
-secuxflow-cli rule add --src 192.168.1.0/24 --dst 10.0.0.5 --port 80 --proto tcp --action drop
+secuxflow rule add --src 192.168.1.0/24 --dst 10.0.0.5 --port 80 --proto tcp --action drop
 ```
 
 #### List all active rules:
 ```
-secuxflow-cli rule list
+secuxflow rule list
 ```
 
 #### Delete a specific rule:
 ```
-secuxflow-cli rule delete --id 42
+secuxflow rule delete --id 42
 ```
 
 #### Clear all rules:
 ```
-secuxflow-cli rule clear
+secuxflow rule clear
 ```
 
 ### WASM Module Forwarding
-#### Configure traffic forwarding to WASM modules:
 ```
-secuxflow-cli forward add --src any --dst 10.0.0.0/24 --port 443 --proto tcp --module ips
-```
-
-#### List forwarding rules:
-```
-secuxflow-cli forward list
+secuxflow inspect --ip 192.168.1.1 --port 443 --proto tcp
 ```
 
 ### System Status
-#### Show current system status:
 ```
-secuxflow-cli status show
-```
-
-#### Display traffic statistics:
-```
-secuxflow-cli status stats --interval 5s
+secuxflow status
 ```
 
 ## Key Features
