@@ -61,6 +61,14 @@ enum RuleAction {
     },
     /// 룰 목록 표시
     List,
+    /// 특정 룰 삭제
+    Delete {
+        /// 삭제할 룰 ID
+        #[clap(long)]
+        id: String,
+    },
+    /// 모든 룰 삭제
+    Clear,
 }
 
 #[cfg(target_os = "linux")]
@@ -79,8 +87,10 @@ pub fn run(xdp_filter: Option<Arc<Mutex<XdpFilter>>>, wasm_inspector: Option<Arc
                     RuleAction::Add { src, dst, port, proto, action } => {
                         info!("XDP 룰 추가: src={}, 액션={}", src, action);
                         let mut xdp = filter.lock().unwrap();
-                        xdp.add_rule(src, dst.as_deref(), *port, proto.as_deref(), action)?;
-                        println!("룰이 추가되었습니다.");
+                        match xdp.add_rule(src, dst.as_deref(), *port, proto.as_deref(), action) {
+                            Ok(rule_id) => println!("룰이 추가되었습니다. ID: {}", rule_id),
+                            Err(e) => println!("룰 추가 실패: {}", e),
+                        }
                     },
                     RuleAction::List => {
                         info!("XDP 룰 목록 표시");
@@ -90,6 +100,22 @@ pub fn run(xdp_filter: Option<Arc<Mutex<XdpFilter>>>, wasm_inspector: Option<Arc
                         println!("현재 XDP 필터링 룰:");
                         for (i, rule) in rules.iter().enumerate() {
                             println!("{}: {}", i+1, rule);
+                        }
+                    },
+                    RuleAction::Delete { id } => {
+                        info!("XDP 룰 삭제: id={}", id);
+                        let mut xdp = filter.lock().unwrap();
+                        match xdp.delete_rule(&id) {
+                            Ok(_) => println!("룰 ID '{}'가 삭제되었습니다.", id),
+                            Err(e) => println!("룰 삭제 실패: {}", e),
+                        }
+                    },
+                    RuleAction::Clear => {
+                        info!("모든 XDP 룰 삭제");
+                        let mut xdp = filter.lock().unwrap();
+                        match xdp.clear_rules() {
+                            Ok(_) => println!("모든 룰이 삭제되었습니다."),
+                            Err(e) => println!("룰 삭제 실패: {}", e),
                         }
                     },
                 }
