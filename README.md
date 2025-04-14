@@ -61,7 +61,7 @@ secuxflow rule list
 
 #### Delete a specific rule:
 ```
-secuxflow rule delete --id 42
+secuxflow rule delete --id "rule-1"
 ```
 
 #### Clear all rules:
