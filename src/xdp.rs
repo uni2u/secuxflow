@@ -131,7 +131,7 @@ impl XdpFilter {
     
     /// XDP 필터링 룰 추가
     pub fn add_rule(&mut self, src: &str, dst: Option<&str>, port: Option<u16>, 
-                   proto: Option<&str>, action: &str) -> Result<()> {
+                   proto: Option<&str>, action: &str) -> Result<String> {
         info!("XDP 룰 추가: src={}, dst={:?}, port={:?}, proto={:?}, action={}", 
              src, dst, port, proto, action);
         
@@ -172,12 +172,8 @@ impl XdpFilter {
             action: xdp_action as u8,
         };
         
-        // 룰 ID 생성 (소스 IP + 목적지 IP + 포트 + 프로토콜)
-        let rule_id = format!("{}-{}-{}-{}", 
-                             Ipv4Addr::from(src_ip.to_be()),
-                             Ipv4Addr::from(dst_ip.to_be()),
-                             port.unwrap_or(0),
-                             protocol);
+        // 간단한 순차적 ID 또는 자동 생성 ID 할당
+        let rule_id = format!("rule-{}", self.rules.len() + 1);
         
         // 룰을 BPF 맵에 추가
         if let Some(skel) = &self.skel {
@@ -191,8 +187,8 @@ impl XdpFilter {
                     Ok(_) => {
                         info!("BPF 맵에 룰 추가 성공: {}", rule_id);
                         // 로컬 캐시에도 룰 저장
-                        self.rules.insert(rule_id, (key, value));
-                        Ok(())
+                        self.rules.insert(rule_id.clone(), (key, value));
+                        Ok(rule_id)
                     },
                     Err(e) => {
                         error!("BPF 맵 업데이트 실패: {}", e);
@@ -202,14 +198,14 @@ impl XdpFilter {
             } else {
                 // BPF 맵이 없는 경우 (개발 모드)
                 warn!("BPF 맵 접근 실패. 메모리 캐시에만 룰 저장.");
-                self.rules.insert(rule_id, (key, value));
-                Ok(())
+                self.rules.insert(rule_id.clone(), (key, value));
+                Ok(rule_id)
             }
         } else {
             // XDP 프로그램이 로드되지 않은 경우 (개발 모드)
             warn!("XDP 프로그램이 로드되지 않았습니다. 메모리 캐시에만 룰 저장.");
-            self.rules.insert(rule_id, (key, value));
-            Ok(())
+            self.rules.insert(rule_id.clone(), (key, value));
+            Ok(rule_id)
         }
     }
     
@@ -234,16 +230,18 @@ impl XdpFilter {
                         _ => "UNKNOWN",
                     };
                     
+                    let proto_str = match key.proto {
+                        6 => "TCP",
+                        17 => "UDP",
+                        _ => "ANY",
+                    };
+                    
                     let rule_str = format!("{}: 소스 IP={}, 목적지 IP={}, 포트={}, 프로토콜={}, 액션={}",
                                         rule_id,
                                         Ipv4Addr::from(key.src_ip.to_be()),
                                         Ipv4Addr::from(key.dst_ip.to_be()),
                                         key.dst_port,
-                                        match key.proto {
-                                            6 => "TCP",
-                                            17 => "UDP",
-                                            _ => "ANY",
-                                        },
+                                        proto_str,
                                         action_str);
                     rules.push(rule_str);
                 }
@@ -259,16 +257,18 @@ impl XdpFilter {
                         _ => "UNKNOWN",
                     };
                     
+                    let proto_str = match key.proto {
+                        6 => "TCP",
+                        17 => "UDP",
+                        _ => "ANY",
+                    };
+                    
                     let rule_str = format!("{}: 소스 IP={}, 목적지 IP={}, 포트={}, 프로토콜={}, 액션={}",
                                         rule_id,
                                         Ipv4Addr::from(key.src_ip.to_be()),
                                         Ipv4Addr::from(key.dst_ip.to_be()),
                                         key.dst_port,
-                                        match key.proto {
-                                            6 => "TCP",
-                                            17 => "UDP",
-                                            _ => "ANY",
-                                        },
+                                        proto_str,
                                         action_str);
                     rules.push(rule_str);
                 }
@@ -285,16 +285,18 @@ impl XdpFilter {
                     _ => "UNKNOWN",
                 };
                 
+                let proto_str = match key.proto {
+                    6 => "TCP",
+                    17 => "UDP",
+                    _ => "ANY",
+                };
+                
                 let rule_str = format!("{}: 소스 IP={}, 목적지 IP={}, 포트={}, 프로토콜={}, 액션={}",
                                     rule_id,
                                     Ipv4Addr::from(key.src_ip.to_be()),
                                     Ipv4Addr::from(key.dst_ip.to_be()),
                                     key.dst_port,
-                                    match key.proto {
-                                        6 => "TCP",
-                                        17 => "UDP",
-                                        _ => "ANY",
-                                    },
+                                    proto_str,
                                     action_str);
                 rules.push(rule_str);
             }
