@@ -1,13 +1,12 @@
 # secuxflow
-SecuXFlow is a proof-of-concept network security system that combines eBPF-XDP based packet filtering with WASM modules for advanced traffic inspection.
 
-## Architecture
-The system consists of the following components:
+secuxflow is a proof-of-concept network security system that combines eBPF-XDP based packet filtering with WASM modules for advanced traffic inspection.
 
-- XDP Filter: Operates at the kernel network driver level to efficiently process packets
-- WASM Modules: Provide advanced traffic inspection (IPS/WAF functionality)
-- CLI Interface: Allows administrators to configure filtering rules and actions
-- Alert System: Notifies network administrators of suspicious traffic patterns
+## Project Overview
+
+This system is designed to provide efficient network security in cloud-native and distributed environments, with a particular focus on performance and security in large-scale workload environments (data clusters, AI training clusters, etc.).
+
+## System Architecture
 
 ```
 +------+        +------------+
@@ -32,131 +31,178 @@ The system consists of the following components:
                                                                  +------------+
 ```
 
-## Workflow
-1. User traffic passes through the XDP Filter
-2. XDP Filter performs basic filtering and forwards specific traffic to WASM modules
-3. WASM modules inspect packets for suspicious patterns
-4. If potential threats are detected, the Alert System notifies network administrators
-5. Administrators can review alerts and create appropriate XDP filtering rules via CLI
-6. New rules are applied to the XDP Filter to block similar traffic patterns at the kernel level
+### Key Components
 
-## CLI Usage
-SecuXFlow provides a command-line interface for managing XDP filtering rules and WASM module configurations.
-
-### Basic Commands
-```
-secuxflow [COMMAND] [OPTIONS]
-```
-
-### Rule Management
-#### Add a new XDP filtering rule:
-```
-secuxflow rule add --src 192.168.1.0/24 --dst 10.0.0.5 --port 80 --proto tcp --action drop
-```
-
-#### List all active rules:
-```
-secuxflow rule list
-```
-
-#### Delete a specific rule:
-```
-secuxflow rule delete --id "rule-1"
-```
-
-#### Clear all rules:
-```
-secuxflow rule clear
-```
-
-### WASM Module Forwarding
-```
-secuxflow inspect --ip 192.168.1.1 --port 443 --proto tcp
-```
-
-### System Status
-```
-secuxflow status
-```
+- **XDP Filter**: Operates at the kernel network driver level to efficiently process packets
+- **WASM Modules**: Provide advanced traffic inspection (IPS/WAF functionality)
+- **CLI Interface**: Manage filtering rules and system configuration
+- **Alert System**: Detect and notify about suspicious traffic patterns
 
 ## Key Features
+
 - High-performance packet filtering at the kernel level using eBPF-XDP
+- Extensible packet inspection through WASM modules
 - Dynamic rule configuration via CLI
-- Advanced packet inspection through WASM modules
-- Efficient traffic forwarding to containerized services
 - Alert system for suspicious traffic patterns
-- Admin-controlled rule generation based on WASM module analysis
+- Efficient traffic forwarding to containerized services
 
-## Project Structure
-```
-secuxflow/
-├── Cargo.toml
-├── rust-toolchain.toml
-├── README.md
-├── build.rs
-├── src/
-│   ├── main.rs
-│   ├── cli.rs
-│   ├── xdp.rs
-│   ├── wasm.rs
-│   └── chain.rs
-├── bpf/
-│   ├── xdp_filter.c
-│   └── common.h
-└── wasm_modules/
-    └── basic_inspect.wasm   # 새로 추가할 파일
-```
+## Prerequisites
 
-## Building and Running
-[TBD]
+### Linux Environment (Ubuntu 22.04 recommended)
 
-### Install Ubuntu Packages
 ```bash
 sudo apt update
 sudo apt install -y build-essential llvm clang libelf-dev zlib1g-dev bpftool linux-headers-$(uname -r) wabt
 ```
 
-### Rust
+### Install Rust
+
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 ```
 
-### Configuration Scripts
+## Installation and Execution
+
+### Set Up Development Environment
+
 ```bash
+# Make scripts executable
 chmod +x scripts/compile_wasm.sh
 chmod +x scripts/setup_dev_env.sh
 chmod +x scripts/test.sh
-```
 
-### Auto Environments
-```bash
+# Automated development environment setup
 ./scripts/setup_dev_env.sh
 ```
 
-### Compile WAT
+### Compile WASM Modules
+
 ```bash
 ./scripts/compile_wasm.sh
 ```
 
-### Build and Running
+### Build and Run
+
 ```bash
-# develop mode build
+# Development build
 cargo build
 
-# release mode build
+# Release build
 cargo build --release
 
-# run
+# Run in development mode
 ./target/debug/secuxflow
+
+# Run in release mode
+./target/release/secuxflow
 ```
 
-### Test
+## CLI Usage
+
+SecuXFlow provides the following command-line interface:
+
+### Basic Command Structure
+
+```
+secuxflow [COMMAND] [OPTIONS]
+```
+
+### Check System Status
+
+```bash
+secuxflow status
+```
+
+### Rule Management
+
+#### Add a new XDP filtering rule:
+
+```bash
+secuxflow rule add --src 192.168.1.0/24 --dst 10.0.0.5 --port 80 --proto tcp --action drop
+```
+
+Supported actions:
+- `pass`: Allow packet to pass through
+- `drop`: Block packet
+- `inspect`: Forward packet to WASM module for inspection
+
+#### List active rules:
+
+```bash
+secuxflow rule list
+```
+
+#### Delete a specific rule:
+
+```bash
+secuxflow rule delete --id "rule-1"
+```
+
+#### Clear all rules:
+
+```bash
+secuxflow rule clear
+```
+
+### Test Packet Inspection
+
+```bash
+secuxflow inspect --ip 192.168.1.1 --port 443 --proto tcp
+```
+
+## Project Structure
+
+```
+secuxflow/
+├── Cargo.toml           # Rust project configuration file
+├── rust-toolchain.toml  # Rust version specification
+├── README.md            # Project documentation
+├── build.rs             # eBPF program build script
+├── src/                 # Source code
+│   ├── main.rs          # Main entry point
+│   ├── cli.rs           # Command-line interface
+│   ├── xdp.rs           # XDP filter implementation
+│   ├── wasm.rs          # WASM module integration
+│   └── chain.rs         # Service chaining implementation
+├── bpf/                 # eBPF programs
+│   ├── xdp_filter.c     # XDP filter program
+│   └── common.h         # Common header
+├── wasm_modules/        # WASM modules
+│   ├── basic_inspect.wat # WASM text format module
+│   └── basic_inspect.wasm # Compiled WASM module
+└── scripts/             # Utility scripts
+    ├── compile_wasm.sh  # WASM module compiler
+    ├── setup_dev_env.sh # Development environment setup
+    └── test.sh          # Test runner
+```
+
+## Limitations and Future Plans
+
+This project is currently at the PoC stage with the following limitations:
+
+- XDP functionality is only available in Linux environments (only WASM modules and CLI interface work on other platforms)
+- Further environmental testing and performance optimization is needed
+- Advanced packet inspection modules need to be developed
+
+Future plans:
+- Develop and extend more WASM modules
+- Integrate real-time monitoring and analysis tools
+- Develop deployment methods optimized for cloud-native environments
+- Performance optimization for high-traffic environments
+
+## Testing
+
+To run basic functionality tests, you can use the following command:
+
 ```bash
 ./scripts/test.sh
 ```
 
-Detailed setup instructions will be added as development progresses.
-
 ## License
+
 [TBD]
+
+## Contributing
+
+This project is in its early stages, and contribution guidelines will be provided in the future.
