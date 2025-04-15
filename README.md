@@ -199,6 +199,27 @@ To run basic functionality tests, you can use the following command:
 ./scripts/test.sh
 ```
 
+## benchmark
+
+### container_benchmark
+
+```bash
+chmod +x container_benchmark.sh
+
+# DDoS 테스트 실행
+sudo ./container_benchmark.sh ddos
+
+# 포트 스캔 테스트 실행
+sudo ./container_benchmark.sh portscan
+
+# 테스트 시간 및 반복 횟수 설정
+DURATION=120 TEST_REPEAT=5 ./container_benchmark.sh ddos
+
+# 인터페이스 및 대상 IP 설정
+INTERFACE="ens33" TARGET_IP="192.168.1.50" ./container_benchmark.sh ddos
+```
+
+
 ## License
 
 [TBD]
