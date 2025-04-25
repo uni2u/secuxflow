@@ -1,6 +1,6 @@
 // src/wasm.rs
 use anyhow::Result;
-use log::{info, error, debug};
+use log::{info, error, debug, warn};
 use std::fmt;
 use std::path::Path;
 use wasmtime::{Engine, Module, Store, Instance, Caller, Extern, Func, ValType, Val};
@@ -97,9 +97,67 @@ impl WasmInspector {
             
             let available_len = std::cmp::min(len as usize, data.len() - offset as usize);
             
-            // WASM 메모리에 데이터 복사 로직이 실제로는 필요하지만,
-            // PoC에서는 단순화를 위해 항상 성공으로 처리
-            available_len as i32
+            // WASM 메모리에 데이터 복사
+            if available_len > 0 {
+                let mem = match caller.get_export("memory") {
+                    Some(Extern::Memory(mem)) => mem,
+                    _ => return -1,
+                };
+                
+                // 메모리에 데이터 복사
+                let dest_offset = offset as u32 as usize;
+                match mem.data_mut(&mut caller).get_mut(dest_offset..(dest_offset + available_len)) {
+                    Some(slice) => {
+                        slice.copy_from_slice(&data[0..available_len]);
+                        available_len as i32
+                    },
+                    None => -1
+                }
+            } else {
+                0 // 가능한 데이터가 없는 경우
+            }
+        });
+        
+        // 타임스탬프 가져오기 함수
+        let get_timestamp_func = Func::wrap(&mut store, |_caller: Caller<'_, WasmEnv>| -> i64 {
+            // 현재 시간을 밀리초로 반환
+            match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+                Ok(n) => n.as_millis() as i64,
+                Err(_) => 0i64,
+            }
+        });
+        
+        // 로그 알림 함수
+        let log_alert_func = Func::wrap(&mut store, |mut caller: Caller<'_, WasmEnv>, offset: i32, len: i32, severity: i32| {
+            // 메모리에서 알림 메시지 읽기
+            if offset < 0 || len <= 0 {
+                return;
+            }
+            
+            let mem = match caller.get_export("memory") {
+                Some(Extern::Memory(mem)) => mem,
+                _ => return,
+            };
+            
+            let data = match mem.data(&caller).get(offset as u32 as usize..(offset as u32 + len as u32) as usize) {
+                Some(data) => data,
+                None => return,
+            };
+            
+            // 알림 메시지를 UTF-8 문자열로 변환
+            let alert_msg = match std::str::from_utf8(data) {
+                Ok(s) => s,
+                Err(_) => "Invalid UTF-8 alert message",
+            };
+            
+            // 심각도에 따라 로그 레벨 설정
+            match severity {
+                1 => debug!("ALERT [LOW]: {}", alert_msg),
+                2 => info!("ALERT [MEDIUM]: {}", alert_msg),
+                3 => warn!("ALERT [HIGH]: {}", alert_msg),
+                4 => error!("ALERT [CRITICAL]: {}", alert_msg),
+                _ => info!("ALERT [UNKNOWN]: {}", alert_msg),
+            }
         });
         
         // 모듈 인스턴스화 (호스트 함수 제공)
@@ -109,6 +167,8 @@ impl WasmInspector {
             &[
                 Extern::Func(get_packet_size_func),
                 Extern::Func(get_packet_data_func),
+                Extern::Func(log_alert_func),
+                Extern::Func(get_timestamp_func),
             ]
         )?;
         
@@ -152,6 +212,11 @@ fn create_default_module(engine: &Engine) -> Result<Module> {
           ;; 호스트 함수 임포트
           (import "" "get_packet_size" (func $get_packet_size (result i32)))
           (import "" "get_packet_data" (func $get_packet_data (param i32 i32) (result i32)))
+          (import "" "log_alert" (func $log_alert (param i32 i32 i32)))
+          (import "" "get_timestamp" (func $get_timestamp (result i64)))
+          
+          ;; 메모리 정의
+          (memory (export "memory") 1)
           
           ;; 패킷 검사 함수 (PoC에서는 입력 바이트가 0이면 통과, 1-10이면 차단, 그 외는 경고)
           (func $inspect_packet (result i32)
