@@ -16,12 +16,6 @@ struct {
     __uint(value_size, sizeof(int));
 } inspect_map SEC(".maps");
 
-/* IP 체크섬 계산 */
-static __always_inline __u16 csum_fold_helper(__u32 csum)
-{
-    return ~((csum & 0xffff) + (csum >> 16));
-}
-
 /* 메인 XDP 필터 프로그램 */
 SEC("xdp")
 int xdp_filter_prog(struct xdp_md *ctx)
@@ -79,6 +73,8 @@ int xdp_filter_prog(struct xdp_md *ctx)
             /* 패킷 데이터를 사용자 공간으로 전달 */
             bpf_perf_event_output(ctx, &inspect_map, BPF_F_CURRENT_CPU, 
                                   ctx->data, ctx->data_end - ctx->data);
+            // 명시적으로 PASS 반환
+            return XDP_PASS;
         }
     }
     
