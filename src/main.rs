@@ -38,7 +38,23 @@ fn main() -> Result<()> {
         let xdp_filter = Arc::new(Mutex::new(xdp::XdpFilter::new()?));
         
         // 서비스 체이닝 초기화
-        let _service_chain = chain::ServiceChain::new(xdp_filter.clone(), wasm_inspector.clone());
+        let service_chain = chain::ServiceChain::new(xdp_filter.clone(), wasm_inspector.clone());
+        
+        // 데모/테스트 용도로 간단한 패킷 처리 예시 추가
+        info!("서비스 체인 테스트 중...");
+        let test_packet = chain::Packet {
+            data: vec![0u8; 64],  // 간단한 테스트 패킷
+            src_ip: "192.168.1.100".to_string(),
+            dst_ip: "10.0.0.1".to_string(),
+            src_port: Some(12345),
+            dst_port: Some(80),
+            protocol: 6, // TCP
+        };
+        
+        match service_chain.process_packet(&test_packet) {
+            Ok(_) => info!("테스트 패킷 처리 성공"),
+            Err(e) => warn!("테스트 패킷 처리 실패: {}", e),
+        }
         
         // CLI 처리
         cli::run(Some(xdp_filter), Some(wasm_inspector))?;
