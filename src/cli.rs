@@ -11,6 +11,10 @@ use crate::wasm::WasmInspector;
 #[derive(Parser)]
 #[clap(name = "secuxflow", about = "SecuXFlow - XDP Filter with WASM Security Module")]
 pub struct Cli {
+    /// Network interface to attach XDP program to (e.g. eth0)
+    #[clap(short, long)]
+    iface: Option<String>,
+    
     #[clap(subcommand)]
     command: Option<Commands>,
 }
@@ -74,6 +78,13 @@ enum RuleAction {
 #[cfg(target_os = "linux")]
 pub fn run(xdp_filter: Option<Arc<Mutex<XdpFilter>>>, wasm_inspector: Option<Arc<WasmInspector>>) -> Result<()> {
     let cli = Cli::parse();
+
+    // ─── 인터페이스 옵션 처리 ────────────────────────────────────
+    if let (Some(iface_name), Some(filter)) = (cli.iface.as_deref(), &xdp_filter) {
+        info!("XDP 인터페이스 '{}' 에 attach 중...", iface_name);
+        let mut xdp = filter.lock().unwrap();
+        xdp.attach(iface_name)?;
+    }
     
     match &cli.command {
         Some(Commands::Status) => {
