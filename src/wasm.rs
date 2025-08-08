@@ -158,6 +158,20 @@ impl WasmInspector {
                 4 => error!("ALERT [CRITICAL]: {}", alert_msg),
                 _ => info!("ALERT [UNKNOWN]: {}", alert_msg),
             }
+            // ─── PoC용 Webhook 알림 전송 ────────────────────────────────
+            // 환경변수 SECUXFLOW_ALERT_WEBHOOK에 URL 설정 필요
+            if let Ok(webhook) = std::env::var("SECUXFLOW_ALERT_WEBHOOK") {
+                let payload = serde_json::json!({ "text": alert_msg });
+                std::thread::spawn(move || {
+                    let _ = reqwest::blocking::Client::new()
+                        .post(&webhook)
+                        .json(&payload)
+                        .send()
+                        .map_err(|e| eprintln!("[WARN] Webhook 전송 실패: {}", e));
+                });
+            } else {
+                warn!("SECUXFLOW_ALERT_WEBHOOK 설정 없음: Webhook 알림을 건너뜁니다");
+            }
         });
         
         // 모듈 인스턴스화 (호스트 함수 제공)
