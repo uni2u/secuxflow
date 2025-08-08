@@ -237,105 +237,57 @@ impl XdpFilter {
         }
     }
     
-    /// 현재 적용된 XDP 필터링 룰 목록 조회
+    /// 현재 적용된 XDP 필터링 룰 목록 조회 (eBPF 맵 <-> 캐시 병렬)
     pub fn list_rules(&self) -> Result<Vec<String>> {
-        let mut rules = Vec::new();
-        
-        // 실제 BPF 맵에서 룰 조회
+        let mut result = Vec::new();
+
+        // 1) BPF 맵에서 규칙 읽기 시도
+        let mut map_rules: Vec<String> = Vec::new();
         if let Some(skel) = &self.skel {
             if let Ok(filter_map) = skel.maps().filter_map() {
-                info!("BPF 맵에서 룰 조회");
-                
-                // BPF 맵에서 모든 키-값 쌍 조회 (이 부분은 실제 환경에서 구현 필요)
-                // 현재 PoC 환경에서는 메모리 캐시만 사용
-                
-                // 메모리 캐시의 룰을 문자열로 변환하여 추가
-                for (rule_id, (key, value)) in &self.rules {
-                    let action_str = match value.action {
-                        0 => "PASS",
-                        1 => "DROP",
-                        2 => "INSPECT",
-                        _ => "UNKNOWN",
-                    };
-                    
-                    let proto_str = match key.proto {
-                        6 => "TCP",
-                        17 => "UDP",
-                        _ => "ANY",
-                    };
-                    
-                    let rule_str = format!("{}: 소스 IP={}, 목적지 IP={}, 포트={}, 프로토콜={}, 액션={}",
-                                        rule_id,
-                                        Ipv4Addr::from(key.src_ip.to_be()),
-                                        Ipv4Addr::from(key.dst_ip.to_be()),
-                                        key.dst_port,
-                                        proto_str,
-                                        action_str);
-                    rules.push(rule_str);
-                }
+                info!("BPF 맵에서 규칙 조회 중...");
+                // PoC: 실제 BPF 맵 순회 로직 구현 필요
+                // 예시) for key in filter_map.keys() { ... }
+                // map_rules.push(format!(...));
             } else {
-                warn!("BPF 맵 접근 실패. 메모리 캐시만 사용.");
-                
-                // 메모리 캐시만 사용
-                for (rule_id, (key, value)) in &self.rules {
-                    let action_str = match value.action {
-                        0 => "PASS",
-                        1 => "DROP", 
-                        2 => "INSPECT",
-                        _ => "UNKNOWN",
-                    };
-                    
-                    let proto_str = match key.proto {
-                        6 => "TCP",
-                        17 => "UDP",
-                        _ => "ANY",
-                    };
-                    
-                    let rule_str = format!("{}: 소스 IP={}, 목적지 IP={}, 포트={}, 프로토콜={}, 액션={}",
-                                        rule_id,
-                                        Ipv4Addr::from(key.src_ip.to_be()),
-                                        Ipv4Addr::from(key.dst_ip.to_be()),
-                                        key.dst_port,
-                                        proto_str,
-                                        action_str);
-                    rules.push(rule_str);
-                }
+                warn!("BPF 맵 접근 실패, 캐시 사용");
             }
+        }
+
+        // 2) 메모리 캐시에 저장된 규칙 문자열 생성
+        let cache_rules: Vec<String> = self.rules.iter().map(|(rule_id, (key, val))| {
+            let action_str = match val.action { 0=>"PASS", 1=>"DROP", 2=>"INSPECT", _=>"UNKNOWN" };
+            let proto_str  = match key.proto   { 6=>"TCP", 17=>"UDP", _=>"ANY" };
+            format!("{}: 소스 IP={}, 목적지 IP={}, 포트={}, 프로토콜={}, 액션={}",
+                    rule_id,
+                    Ipv4Addr::from(key.src_ip.to_be()),
+                    Ipv4Addr::from(key.dst_ip.to_be()),
+                    key.dst_port,
+                    proto_str,
+                    action_str)
+        }).collect();
+
+        // 3) 우선 map_rules, 없으면 cache_rules
+        if !map_rules.is_empty() {
+            result = map_rules.clone();
         } else {
-            warn!("XDP 프로그램이 로드되지 않았습니다. 메모리 캐시만 사용.");
-            
-            // 메모리 캐시만 사용
-            for (rule_id, (key, value)) in &self.rules {
-                let action_str = match value.action {
-                    0 => "PASS",
-                    1 => "DROP", 
-                    2 => "INSPECT",
-                    _ => "UNKNOWN",
-                };
-                
-                let proto_str = match key.proto {
-                    6 => "TCP",
-                    17 => "UDP",
-                    _ => "ANY",
-                };
-                
-                let rule_str = format!("{}: 소스 IP={}, 목적지 IP={}, 포트={}, 프로토콜={}, 액션={}",
-                                    rule_id,
-                                    Ipv4Addr::from(key.src_ip.to_be()),
-                                    Ipv4Addr::from(key.dst_ip.to_be()),
-                                    key.dst_port,
-                                    proto_str,
-                                    action_str);
-                rules.push(rule_str);
+            result = cache_rules.clone();
+        }
+
+        // 4) cache_rules 중 map_rules에 없는 항목 병합
+        for r in cache_rules {
+            if !result.contains(&r) {
+                info!("캐시 규칙 병합: {}", r);
+                result.push(r);
             }
         }
-        
-        // 룰이 없는 경우 샘플 룰 추가 (PoC 데모용)
-        if rules.is_empty() {
-            rules.push("샘플 룰 - PoC 모드".to_string());
+
+        // 5) 결과가 없으면 PoC 샘플 룰 안내
+        if result.is_empty() {
+            result.push("샘플 룰 - PoC 모드".to_string());
         }
-        
-        Ok(rules)
+
+        Ok(result)
     }
     
     /// 특정 룰 삭제
