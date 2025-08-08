@@ -84,6 +84,14 @@ chmod +x scripts/compile_wasm.sh
 chmod +x scripts/setup_dev_env.sh
 chmod +x scripts/test.sh
 
+# Linux or Mac (bash/zsh)
+export SECUXFLOW_ALERT_WEBHOOK="https://hooks.example.com/your-path"
+cargo run --release -- -i eth0 rule add --src 10.0.0.1 --action inspect
+
+# Windows (PowerShell)
+$Env:SECUXFLOW_ALERT_WEBHOOK="https://hooks.example.com/your-path"
+cargo run --release -- -i eth0 rule add --src 10.0.0.1 --action inspect
+
 # Automated development environment setup (requires sudo permission)
 ./scripts/setup_dev_env.sh
 ```
