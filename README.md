@@ -70,57 +70,42 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 ```
 
-## Installation and Execution
-### Clone Repository
+## Installation and Execution (Target: Ubuntu 22.04)
+
+### Quick Start (Automated)
+For a fresh Ubuntu 22.04 environment, you can set up and test the entire system with two commands:
+
 ```bash
-git clone https://github.com/uni2u/secuxflow.git
-cd secuxflow
+# 1. Setup Environment (Installs dependencies and compiles WASM)
+# This script will install llvm, clang, libbpf-dev, and wabt.
+sudo ./scripts/setup_dev_env.sh
+
+# 2. Run Automated Functional Tests
+# This script builds the project and executes core CLI features.
+sudo ./scripts/test.sh
 ```
 
-### Set Up Development Environment
+### Manual Installation
+
+#### 1. System Dependencies
 ```bash
-# Make scripts executable
-chmod +x scripts/compile_wasm.sh
-chmod +x scripts/setup_dev_env.sh
-chmod +x scripts/test.sh
-
-# Linux or Mac (bash/zsh)
-export SECUXFLOW_ALERT_WEBHOOK="https://hooks.example.com/your-path"
-cargo run --release -- -i eth0 rule add --src 10.0.0.1 --action inspect
-
-# Windows (PowerShell)
-$Env:SECUXFLOW_ALERT_WEBHOOK="https://hooks.example.com/your-path"
-cargo run --release -- -i eth0 rule add --src 10.0.0.1 --action inspect
-
-# Automated development environment setup (requires sudo permission)
-./scripts/setup_dev_env.sh
+sudo apt update
+sudo apt install -y build-essential llvm clang libelf-dev zlib1g-dev \
+                    libbpf-dev linux-headers-$(uname -r) wabt
 ```
-> **Note**: The setup script will install all necessary dependencies including build tools, eBPF dependencies, and check Rust installation.
 
-### Compile WASM Modules
+#### 2. Compile WASM Modules
+The system requires compiled WebAssembly binaries for packet inspection:
 ```bash
 ./scripts/compile_wasm.sh
 ```
-> **Important**: This step creates the WebAssembly modules required for packet inspection.
 
-### Build and Run
+#### 3. Build and Run
 ```bash
-# Development build
-cargo build
-
-# Release build
+# Build the project
 cargo build --release
-```
 
-### Run the Application
-```bash
-# Development mode (requires root privileges for XDP functionality)
-sudo ./target/debug/secuxflow
-
-# OR in release mode
-sudo ./target/release/secuxflow
-
-# Run with specific network interface (recommended for real traffic inspection)
+# Run with root privileges (Required for XDP)
 sudo ./target/release/secuxflow -i eth0
 ```
 
