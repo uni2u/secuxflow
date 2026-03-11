@@ -3,7 +3,7 @@ name = "secuxflow"
 version = "0.1.0"
 edition = "2021"
 #authors = ""
-escription = "eBPF-XDP based network security system with WASM inspection modules"
+description = "eBPF-XDP based network security system with WASM inspection modules"
 build = "build.rs"  # eBPF 프로그램 빌드 스크립트 적용
 
 [dependencies]

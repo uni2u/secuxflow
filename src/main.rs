@@ -28,8 +28,12 @@ fn main() -> Result<()> {
     }
     
     // WASM 모듈 초기화
-    let wasm_inspector = Arc::new(wasm::WasmInspector::new("wasm_modules/basic_inspect.wasm")?);
-    
+//    let wasm_inspector = Arc::new(wasm::WasmInspector::new("wasm_modules/basic_inspect.wasm")?);
+//    let wasm_inspector = Arc::new(wasm::WasmInspector::new("wasm_modules/mcp_inspector.wasm")?);
+
+    let wasm_path = std::env::var("WASM_MODULE").unwrap_or_else(|_| "wasm_modules/basic_inspect.wasm".to_string());
+    let wasm_inspector = Arc::new(wasm::WasmInspector::new(&wasm_path)?);
+
     #[cfg(target_os = "linux")]
     {
         info!("Linux 환경 감지: XDP 기능 초기화 중...");
