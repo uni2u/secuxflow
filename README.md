@@ -172,9 +172,14 @@ secuxflow/
 ├── wasm_modules/        # WASM modules
 │   ├── basic_inspect.wat # WASM text format module
 │   └── basic_inspect.wasm # Compiled WASM module
+├── mcp_inspector/       # New: Rust-based L7 WASM module source
+│   ├── src/lib.rs       # Stateful L7 inspection logic
+│   └── Cargo.toml       # Fixed dependencies for Rust 1.70.0
 └── scripts/             # Utility scripts
     ├── compile_wasm.sh  # WASM module compiler
     ├── setup_dev_env.sh # Development environment setup
+    ├── build_rust_wasm.sh # New: Build script for Rust WASM
+    ├── mcp_generator.py   # New: Scapy-based L7 traffic generator
     └── test.sh          # Test runner
 ```
 
@@ -279,3 +284,29 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 
 ## Contributing
 This project is in its early stages, and contribution guidelines will be provided in the future.
+
+## L7 MCP Inspection Guide (Research Replication)
+
+This section provides instructions for replicating the L7-aware security results (e.g., Figure 3 in the paper) using the high-performance Rust-based WASM module.
+
+### 1. Build the Rust WASM Module
+Unlike the basic WAT modules, the MCP inspector requires a specific Rust-WASI build environment.
+```bash
+# This script uses the pre-configured Cargo.lock to ensure dependency compatibility with Rust 1.70.0.
+./scripts/build_rust_wasm.sh
+```
+
+### 2. Run with Dynamic WASM Loading
+SecuXFlow now supports switching between L4-only and L7-aware inspection at runtime via environment variables.
+```bash
+# Execute with the L7 MCP inspector (Dynamic Loading)
+sudo WASM_MODULE=wasm_modules/mcp_inspector.wasm ./target/release/secuxflow --iface eth0
+```
+
+### 3. L7 Traffic Testing (MCP Scenario)
+To verify the L7 stateful inspection, use the specialized Python traffic generator.
+```bash
+# Requirements: pip install scapy
+# It tests three scenarios: Normal, Unauthorized Tool Call, and Prompt Injection.
+sudo python3 scripts/mcp_generator.py --iface eth0 --dst-ip <TARGET_IP>
+```
