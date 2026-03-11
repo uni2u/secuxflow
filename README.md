@@ -287,7 +287,7 @@ This project is in its early stages, and contribution guidelines will be provide
 
 ## L7 MCP Inspection Guide (Research Replication)
 
-This section provides instructions for replicating the L7-aware security results (e.g., Figure 3 in the paper) using the high-performance Rust-based WASM module.
+This section provides instructions for replicating the L7-aware security test results using the high-performance Rust-based WASM module.
 
 ### 1. Build the Rust WASM Module
 Unlike the basic WAT modules, the MCP inspector requires a specific Rust-WASI build environment.
