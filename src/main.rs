@@ -20,6 +20,9 @@ fn main() -> Result<()> {
     env_logger::init();
     
     info!("SecuXFlow PoC 시작...");
+
+    // 1. [위치 이동] 환경 변수 파싱을 최상단으로 이동 (모든 플랫폼 공통 사용)
+    let k_val: u32 = std::env::var("INSPECT_K").unwrap_or_else(|_| "12".to_string()).parse().unwrap_or(12);
     
     #[cfg(not(target_os = "linux"))]
     {
@@ -28,9 +31,6 @@ fn main() -> Result<()> {
     }
     
     // WASM 모듈 초기화
-//    let wasm_inspector = Arc::new(wasm::WasmInspector::new("wasm_modules/basic_inspect.wasm")?);
-//    let wasm_inspector = Arc::new(wasm::WasmInspector::new("wasm_modules/mcp_inspector.wasm")?);
-
     let wasm_path = std::env::var("WASM_MODULE").unwrap_or_else(|_| "wasm_modules/basic_inspect.wasm".to_string());
     let wasm_inspector = Arc::new(wasm::WasmInspector::new(&wasm_path)?);
 
@@ -39,9 +39,6 @@ fn main() -> Result<()> {
     #[cfg(target_os = "linux")]
     {
         info!("Linux 환경 감지: XDP 기능 초기화 중...");
-        
-        // 환경 변수 파싱
-        let k_val: u32 = std::env::var("INSPECT_K").unwrap_or_else(|_| "12".to_string()).parse().unwrap_or(12);
 
         // 1. XDP 필터 인스턴스 생성
         let mut filter_obj = xdp::XdpFilter::new()?;
