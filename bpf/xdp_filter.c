@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #include "common.h"
 
-#define INSPECT_K_THRESHOLD 12
+//#define INSPECT_K_THRESHOLD 12
 
 /* 필터링 룰 맵 정의 */
 struct {
@@ -15,6 +15,14 @@ struct {
 struct flow_stats {
     __u32 packet_count;
 };
+
+/* 2. 설정값 저장을 위한 전역 맵 추가 (딱 1개 엔트리) */
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, __u32);
+    __type(value, __u32);
+} config_map SEC(".maps");
 
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -50,6 +58,11 @@ int xdp_filter_prog(struct xdp_md *ctx)
     struct iphdr *iph = (struct iphdr *)(eth + 1);
     if (iph + 1 > data_end)
         return XDP_DROP;
+
+    // 추가: 맵에서 k값 읽어오기 (없으면 기본값 12)
+    __u32 cfg_key = 0;
+    __u32 *k_val = bpf_map_lookup_elem(&config_map, &cfg_key);
+    __u32 k_threshold = k_val ? *k_val : 12;
         
     /* 필터링 룰 키 설정 */
     struct filter_key key = {
@@ -93,7 +106,7 @@ int xdp_filter_prog(struct xdp_md *ctx)
 
         if (stats) {
             // k(12)개 미만일 때만 WASM으로 전송
-            if (stats->packet_count < INSPECT_K_THRESHOLD) {
+            if (stats->packet_count < k_threshold) {
                 __sync_fetch_and_add(&stats->packet_count, 1);
                 bpf_perf_event_output(ctx, &inspect_map, BPF_F_CURRENT_CPU, data, data_end - data);
                 return XDP_PASS; // 유저 공간 분석 중이므로 통과

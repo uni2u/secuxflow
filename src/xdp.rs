@@ -346,6 +346,28 @@ impl XdpFilter {
             Err(_) => Err(anyhow!("잘못된 IP 주소 형식: {}", ip_str)),
         }
     }
+
+    /// [추가] BPF 맵의 k 임계값을 동적으로 업데이트
+    pub fn set_k_threshold(&mut self, k: u32) -> Result<()> {
+        if let Some(skel) = &mut self.skel {
+            // 스켈레톤에서 config_map 찾기
+            let maps = skel.maps();
+            let config_map = maps.config_map();
+
+            let key = 0u32.to_ne_bytes();
+            let value = k.to_ne_bytes();
+
+            // 인덱스 0번에 k값 쓰기
+            config_map.update(&key, &value, libbpf_rs::MapFlags::ANY)
+                .map_err(|e| anyhow!("config_map 업데이트 실패: {}", e))?;
+
+            info!("BPF config_map 업데이트 완료: k = {}", k);
+            Ok(())
+        } else {
+            warn!("XDP 스켈레톤이 없어 맵을 업데이트할 수 없습니다. (개발 모드)");
+            Ok(())
+        }
+    }
 }
 
 #[cfg(target_os = "linux")]

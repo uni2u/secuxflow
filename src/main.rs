@@ -34,33 +34,31 @@ fn main() -> Result<()> {
     let wasm_path = std::env::var("WASM_MODULE").unwrap_or_else(|_| "wasm_modules/basic_inspect.wasm".to_string());
     let wasm_inspector = Arc::new(wasm::WasmInspector::new(&wasm_path)?);
 
+    // 환경 변수 INSPECT_K에서 값을 가져옵니다.
+    let k_val: u32 = std::env::var("INSPECT_K").unwrap_or_else(|_| "12".to_string()).parse().unwrap_or(12);
+
+    // config_map에 해당 값을 씁니다. (Aya 라이브러리 예시)
+    let mut config: Array<_, u32> = Array::try_from(bpf.map_mut("config_map")?)?;
+    config.set(0, k_val, 0)?;
+
+    println!("[INFO] System initialized with inspection threshold k = {}", k_val);
+
     #[cfg(target_os = "linux")]
     {
         info!("Linux 환경 감지: XDP 기능 초기화 중...");
         
-        // XDP 필터 초기화
-        let xdp_filter = Arc::new(Mutex::new(xdp::XdpFilter::new()?));
-        
-        // 서비스 체이닝 초기화
+        // 1. XDP 필터 인스턴스 생성
+        let mut filter_obj = xdp::XdpFilter::new()?;
+
+        // 2. 생성된 인스턴스에 k값 주입
+        filter_obj.set_k_threshold(k_val)?;
+
+        let xdp_filter = Arc::new(Mutex::new(filter_obj));
+
+        // 서비스 체이닝 초기화 및 이후 로직 (기존과 동일)
         let service_chain = chain::ServiceChain::new(xdp_filter.clone(), wasm_inspector.clone());
-        
-        // 데모/테스트 용도로 간단한 패킷 처리 예시 추가
-        info!("서비스 체인 테스트 중...");
-        let test_packet = chain::Packet {
-            data: vec![0u8; 64],  // 간단한 테스트 패킷
-            src_ip: "192.168.1.100".to_string(),
-            dst_ip: "10.0.0.1".to_string(),
-            src_port: Some(12345),
-            dst_port: Some(80),
-            protocol: 6, // TCP
-        };
-        
-        match service_chain.process_packet(&test_packet) {
-            Ok(_) => info!("테스트 패킷 처리 성공"),
-            Err(e) => warn!("테스트 패킷 처리 실패: {}", e),
-        }
-        
-        // CLI 처리
+
+        info!("시스템 초기화 완료 (k={})", k_val);
         cli::run(Some(xdp_filter), Some(wasm_inspector))?;
     }
     
