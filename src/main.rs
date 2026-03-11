@@ -34,19 +34,15 @@ fn main() -> Result<()> {
     let wasm_path = std::env::var("WASM_MODULE").unwrap_or_else(|_| "wasm_modules/basic_inspect.wasm".to_string());
     let wasm_inspector = Arc::new(wasm::WasmInspector::new(&wasm_path)?);
 
-    // 환경 변수 INSPECT_K에서 값을 가져옵니다.
-    let k_val: u32 = std::env::var("INSPECT_K").unwrap_or_else(|_| "12".to_string()).parse().unwrap_or(12);
-
-    // config_map에 해당 값을 씁니다. (Aya 라이브러리 예시)
-    let mut config: Array<_, u32> = Array::try_from(bpf.map_mut("config_map")?)?;
-    config.set(0, k_val, 0)?;
-
     println!("[INFO] System initialized with inspection threshold k = {}", k_val);
 
     #[cfg(target_os = "linux")]
     {
         info!("Linux 환경 감지: XDP 기능 초기화 중...");
         
+        // 환경 변수 파싱
+        let k_val: u32 = std::env::var("INSPECT_K").unwrap_or_else(|_| "12".to_string()).parse().unwrap_or(12);
+
         // 1. XDP 필터 인스턴스 생성
         let mut filter_obj = xdp::XdpFilter::new()?;
 

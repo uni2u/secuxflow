@@ -11,12 +11,7 @@ struct {
     __type(value, struct filter_value);
 } filter_map SEC(".maps");
 
-/* 플로우별 패킷 카운터 (Stateful Path: k값 추적용) */
-struct flow_stats {
-    __u32 packet_count;
-};
-
-/* 2. 설정값 저장을 위한 전역 맵 추가 (딱 1개 엔트리) */
+/* [통합] 동적 설정을 위한 설정 맵 */
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, 1);
@@ -24,6 +19,8 @@ struct {
     __type(value, __u32);
 } config_map SEC(".maps");
 
+/* 플로우별 패킷 카운터 */
+struct flow_stats { __u32 packet_count; };
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 16384);
@@ -44,7 +41,12 @@ int xdp_filter_prog(struct xdp_md *ctx)
 {
     void *data_end = (void *)(long)ctx->data_end;
     void *data = (void *)(long)ctx->data;
-    
+   
+    /* 동적 k_threshold 조회 */
+    __u32 cfg_idx = 0;
+    __u32 *k_val = bpf_map_lookup_elem(&config_map, &cfg_idx);
+    __u32 k_threshold = k_val ? *k_val : 12;
+
     /* 이더넷 헤더 파싱 */
     struct ethhdr *eth = data;
     if (eth + 1 > data_end)
@@ -58,37 +60,13 @@ int xdp_filter_prog(struct xdp_md *ctx)
     struct iphdr *iph = (struct iphdr *)(eth + 1);
     if (iph + 1 > data_end)
         return XDP_DROP;
-
-    // 추가: 맵에서 k값 읽어오기 (없으면 기본값 12)
-    __u32 cfg_key = 0;
-    __u32 *k_val = bpf_map_lookup_elem(&config_map, &cfg_key);
-    __u32 k_threshold = k_val ? *k_val : 12;
         
     /* 필터링 룰 키 설정 */
     struct filter_key key = {
         .src_ip = iph->saddr,
         .dst_ip = iph->daddr,
-        .proto = iph->protocol,
-        .src_port = 0,
-        .dst_port = 0
+        .proto = iph->protocol
     };
-    
-    /* TCP/UDP 포트 정보 추출 */
-    if (iph->protocol == IPPROTO_TCP) {
-        struct tcphdr *tcph = (struct tcphdr *)(iph + 1);
-        if (tcph + 1 > data_end)
-            return XDP_DROP;
-            
-        key.src_port = bpf_ntohs(tcph->source);
-        key.dst_port = bpf_ntohs(tcph->dest);
-    } else if (iph->protocol == IPPROTO_UDP) {
-        struct udphdr *udph = (struct udphdr *)(iph + 1);
-        if (udph + 1 > data_end)
-            return XDP_DROP;
-            
-        key.src_port = bpf_ntohs(udph->source);
-        key.dst_port = bpf_ntohs(udph->dest);
-    }
     
     // 기본 필터링
     struct filter_value *value = bpf_map_lookup_elem(&filter_map, &key);
@@ -96,9 +74,8 @@ int xdp_filter_prog(struct xdp_md *ctx)
         return XDP_PASS;
 
     // Action이 DROP일 때
-    if (value->action == XDP_DROP) {
+    if (value->action == XDP_DROP)
         return XDP_DROP;
-    }
 
     // Action이 INSPECT일 때
     else if (value->action == XDP_INSPECT) {
