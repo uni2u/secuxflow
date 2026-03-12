@@ -15,7 +15,7 @@ use std::{
 
 #[cfg(target_os = "linux")]
 use crate::xdp::XdpFilter;
-use crate::wasm::WasmInspector;
+use crate::wasm::{InspectionResult, WasmInspector};
 
 #[derive(Parser)]
 #[clap(name = "secuxflow", about = "SecuXFlow - XDP Filter with WASM Security Module")]
@@ -160,7 +160,12 @@ pub fn run(xdp_filter: Option<Arc<Mutex<XdpFilter>>>, wasm_inspector: Option<Arc
                 .unwrap_or(12);
 
             info!("엔진 상주 실행 시작: iface={}, k={}", iface_name, k_val);
-            run_daemon(iface_name, k_val)?;
+            run_daemon(
+                iface_name,
+                k_val,
+                xdp_filter.clone(),
+                wasm_inspector.clone(),
+            )?;
         }
         
         Some(Commands::Inspect { ip, port, proto }) => {
@@ -177,7 +182,12 @@ pub fn run(xdp_filter: Option<Arc<Mutex<XdpFilter>>>, wasm_inspector: Option<Arc
 }
 
 #[cfg(target_os = "linux")]
-fn run_daemon(iface_name: &str, k_val: u32) -> Result<()> {
+fn run_daemon(
+    iface_name: &str,
+    k_val: u32,
+    xdp_filter: Option<Arc<Mutex<XdpFilter>>>,
+    wasm_inspector: Option<Arc<WasmInspector>>,
+) -> Result<()> {
     let metrics_path = resolve_metrics_path();
     let metrics_dir = metrics_path.parent().unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(metrics_dir)?;
@@ -196,61 +206,133 @@ fn run_daemon(iface_name: &str, k_val: u32) -> Result<()> {
         metrics_file.flush()?;
     }
 
+    let inspect_log_path = resolve_inspection_log_path();
+    let inspect_dir = inspect_log_path.parent().unwrap_or_else(|| Path::new("."));
+    fs::create_dir_all(inspect_dir)?;
+
+    let inspect_header_needed =
+        !inspect_log_path.exists() || fs::metadata(&inspect_log_path)?.len() == 0;
+    let mut inspect_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&inspect_log_path)?;
+
+    if inspect_header_needed {
+        writeln!(
+            inspect_file,
+            "recv_ts_ns,done_ts_ns,latency_ns,seq_id,label,send_ts_ns,verdict,packet_len"
+        )?;
+        inspect_file.flush()?;
+    }
+
     let start = Instant::now();
+    let mut last_metrics_tick = Instant::now();
     let mut prev_rx = read_rx_bytes(iface_name).unwrap_or(0);
     let mut prev_cpu = read_cpu_counters()?;
 
     println!(
-        "SecuXFlow daemon running on '{}' (k={}). metrics={}",
+        "SecuXFlow daemon running on '{}' (k={}). metrics={}, inspect_log={}",
         iface_name,
         k_val,
-        metrics_path.display()
+        metrics_path.display(),
+        inspect_log_path.display()
     );
 
     loop {
-        thread::sleep(Duration::from_secs(1));
+        if let (Some(filter), Some(inspector)) = (&xdp_filter, &wasm_inspector) {
+            if let Ok(mut xdp) = filter.lock() {
+                xdp.poll_inspect_events(100, |packet| {
+                    let recv_ts_ns = now_epoch_ns();
+                    let (seq_id, label, send_ts_ns) = extract_generator_trace_fields(packet);
 
-        let now_ms = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|e| anyhow!("system time error: {}", e))?
-            .as_millis();
+                    let verdict = match inspector.inspect_packet(packet) {
+                        Ok(InspectionResult::Pass) => "PASS".to_string(),
+                        Ok(InspectionResult::Drop) => "DROP".to_string(),
+                        Ok(InspectionResult::Alert { message }) => {
+                            format!("ALERT:{}", sanitize_csv_field(&message))
+                        }
+                        Err(e) => format!("ERROR:{}", sanitize_csv_field(&e.to_string())),
+                    };
 
-        let current_rx = read_rx_bytes(iface_name).unwrap_or(prev_rx);
-        let current_cpu = read_cpu_counters().unwrap_or(prev_cpu);
-        let current_mem = read_memory_rss_kb().unwrap_or(0);
+                    let done_ts_ns = now_epoch_ns();
+                    let latency_ns = done_ts_ns.saturating_sub(recv_ts_ns);
 
-        let delta_rx = current_rx.saturating_sub(prev_rx);
-        let rx_kbps = (delta_rx as f64 * 8.0) / 1000.0;
+                    let seq_str = seq_id
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| "NA".to_string());
+                    let send_str = send_ts_ns
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| "NA".to_string());
 
-        let proc_delta = current_cpu.0.saturating_sub(prev_cpu.0) as f64;
-        let total_delta = current_cpu.1.saturating_sub(prev_cpu.1) as f64;
-        let cpu_usage_pct = if total_delta > 0.0 {
-            (proc_delta / total_delta) * 100.0
+                    let _ = writeln!(
+                        inspect_file,
+                        "{},{},{},{},{},{},{},{}",
+                        recv_ts_ns,
+                        done_ts_ns,
+                        latency_ns,
+                        seq_str,
+                        sanitize_csv_field(&label),
+                        send_str,
+                        sanitize_csv_field(&verdict),
+                        packet.len()
+                    );
+                    let _ = inspect_file.flush();
+
+                    if verdict.starts_with("ALERT") || verdict.starts_with("DROP") {
+                        println!(
+                            "[EXPB] seq_id={} label={} verdict={} latency_ns={}",
+                            seq_str, label, verdict, latency_ns
+                        );
+                    }
+                })?;
+            } else {
+                thread::sleep(Duration::from_millis(100));
+            }
         } else {
-            0.0
-        };
+            thread::sleep(Duration::from_millis(100));
+        }
 
-        writeln!(
-            metrics_file,
-            "{},{},{},{:.3},{:.3},{}",
-            now_ms, iface_name, current_rx, rx_kbps, cpu_usage_pct, current_mem
-        )?;
-        metrics_file.flush()?;
+        if last_metrics_tick.elapsed() >= Duration::from_secs(1) {
+            let now_ms = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|e| anyhow!("system time error: {}", e))?
+                .as_millis();
 
-        println!(
-            "[METRIC] uptime_s={}, iface={}, rx_kbps={:.3}, cpu_usage_pct={:.3}, memory_rss_kb={}",
-            start.elapsed().as_secs(),
-            iface_name,
-            rx_kbps,
-            cpu_usage_pct,
-            current_mem
-        );
+            let current_rx = read_rx_bytes(iface_name).unwrap_or(prev_rx);
+            let current_cpu = read_cpu_counters().unwrap_or(prev_cpu);
+            let current_mem = read_memory_rss_kb().unwrap_or(0);
 
-        // [향후 확장 포인트]
-        // 여기에서 perf_event를 poll하여 inspect_map -> WASM 검사로 연결할 수 있습니다.
+            let delta_rx = current_rx.saturating_sub(prev_rx);
+            let rx_kbps = (delta_rx as f64 * 8.0) / 1000.0;
 
-        prev_rx = current_rx;
-        prev_cpu = current_cpu;
+            let proc_delta = current_cpu.0.saturating_sub(prev_cpu.0) as f64;
+            let total_delta = current_cpu.1.saturating_sub(prev_cpu.1) as f64;
+            let cpu_usage_pct = if total_delta > 0.0 {
+                (proc_delta / total_delta) * 100.0
+            } else {
+                0.0
+            };
+
+            writeln!(
+                metrics_file,
+                "{},{},{},{:.3},{:.3},{}",
+                now_ms, iface_name, current_rx, rx_kbps, cpu_usage_pct, current_mem
+            )?;
+            metrics_file.flush()?;
+
+            println!(
+                "[METRIC] uptime_s={}, iface={}, rx_kbps={:.3}, cpu_usage_pct={:.3}, memory_rss_kb={}",
+                start.elapsed().as_secs(),
+                iface_name,
+                rx_kbps,
+                cpu_usage_pct,
+                current_mem
+            );
+
+            prev_rx = current_rx;
+            prev_cpu = current_cpu;
+            last_metrics_tick = Instant::now();
+        }
     }
 }
 
@@ -260,6 +342,49 @@ fn resolve_metrics_path() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("benchmark_results/metrics_secuxflow.csv"))
 }
+
+fn resolve_inspection_log_path() -> PathBuf {
+    std::env::var("SECUXFLOW_INSPECT_LOG_FILE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("benchmark_results/experiment_b_inspection.csv"))
+}
+
+fn now_epoch_ns() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)
+}
+
+fn sanitize_csv_field(value: &str) -> String {
+    value.replace(',', ";").replace('\n', " ").replace('\r', " ")
+}
+
+fn extract_generator_trace_fields(packet: &[u8]) -> (Option<u64>, String, Option<u128>) {
+    let payload = match packet.get(54..) {
+        Some(v) => v,
+        None => return (None, "unknown".to_string(), None),
+    };
+
+    match serde_json::from_slice::<serde_json::Value>(payload) {
+        Ok(v) => {
+            let seq_id = v.get("seq_id").and_then(|x| x.as_u64());
+            let label = v
+                .get("label")
+                .and_then(|x| x.as_str())
+                .unwrap_or("unknown")
+                .to_string();
+            let send_ts_ns = v
+                .get("send_ts_ns")
+                .and_then(|x| x.as_u64())
+                .map(|x| x as u128);
+
+            (seq_id, label, send_ts_ns)
+        }
+        Err(_) => (None, "unparsed".to_string(), None),
+    }
+}
+
 
 #[cfg(target_os = "linux")]
 fn read_rx_bytes(iface_name: &str) -> Result<u64> {

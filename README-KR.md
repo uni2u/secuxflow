@@ -62,6 +62,85 @@ sudo INSPECT_K=<VALUE> ./target/release/secuxflow --iface <NIC_NAME> run
 sudo python3 scripts/mcp_generator.py --iface <NIC_NAME> --dst-ip <TARGET_IP>
 ```
 
+##### 실험 B 최소 계측 절차
+실험 B는 generator 기반 synthetic MCP-like traffic을 사용하며, 실시간 탐지율 및 검사 지연 시간은 엔진 로그와 generator trace를 수동 대조하여 검증합니다.
+
+```bash
+# 터미널 1: 엔진 실행 (실험 B 계측 로그 포함)
+sudo SECUXFLOW_INSPECT_LOG_FILE=benchmark_results/experiment_b_inspection.csv \
+INSPECT_K=<VALUE> WASM_MODULE=wasm_modules/mcp_inspector.wasm \
+./target/release/secuxflow --iface <NIC_NAME> run
+
+# 터미널 2: generator 실행 (송신 trace 저장)
+sudo python3 scripts/mcp_generator.py \
+  --iface <NIC_NAME> \
+  --dst-ip <TARGET_IP> \
+  --trace-file benchmark_results/mcp_generator_trace.csv
+```
+
+- 실험 종료후 다음의 파일 확인
+```bash
+benchmark_results/mcp_generator_trace.csv
+benchmark_results/experiment_b_inspection.csv
+```
+
+#### 수동 검증 방법
+```md id="2vrz7b"
+##### 실시간 탐지율 수동 검증
+generator trace의 `label`을 ground truth로 사용하고, inspection 로그의 `verdict`를 기준으로 탐지 여부를 판단합니다.
+
+```bash
+# generator가 전송한 malicious 샘플 수
+awk -F',' 'NR>1 && $2=="malicious" {c++} END {print c+0}' benchmark_results/mcp_generator_trace.csv
+
+# inspection 로그에서 malicious 샘플 중 탐지된 수 (DROP 또는 ALERT)
+awk -F',' 'NR>1 && $5=="malicious" && ($7 ~ /^DROP/ || $7 ~ /^ALERT/) {c++} END {print c+0}' benchmark_results/experiment_b_inspection.csv
+
+# 단순 탐지율(%)
+awk 'BEGIN { sent=0; detected=0 }
+     FNR==NR && NR>1 { if ($2=="malicious") sent++ ; next }
+     NR>1 { if ($5=="malicious" && ($7 ~ /^DROP/ || $7 ~ /^ALERT/)) detected++ }
+     END {
+       if (sent>0) printf "Detection Rate: %.2f%%\\n", (detected/sent)*100;
+       else print "Detection Rate: N/A";
+     }' FS=',' benchmark_results/mcp_generator_trace.csv benchmark_results/experiment_b_inspection.csv
+```
+
+#### 검사 지연 시간 수동 검증
+inspection 로그의 `latency_ns` 열을 기준으로 평균 및 최대 검사 지연 시간을 계산합니다.
+
+```bash
+# 평균 검사 지연 시간(ns)
+awk -F',' 'NR>1 {sum+=$3; n++} END { if (n>0) printf "Mean Latency(ns): %.2f\\n", sum/n; else print "Mean Latency(ns): N/A" }' benchmark_results/experiment_b_inspection.csv
+
+# 최대 검사 지연 시간(ns)
+awk -F',' 'NR>1 { if ($3>max) max=$3 } END { if (max>0) printf "Max Latency(ns): %d\\n", max; else print "Max Latency(ns): N/A" }' benchmark_results/experiment_b_inspection.csv
+
+# p95 검사 지연 시간(ns)
+awk -F',' 'NR>1 {print $3}' benchmark_results/experiment_b_inspection.csv | sort -n | \
+awk '{
+  a[NR]=$1
+}
+END {
+  if (NR==0) { print "P95 Latency(ns): N/A"; exit }
+  idx=int(NR*0.95)
+  if (idx<1) idx=1
+  printf "P95 Latency(ns): %s\\n", a[idx]
+}'
+```
+
+#### 해석기준
+위 수동 검증 블록 **바로 아래**에 아래 설명을 넣어 주세요.
+
+```md id="4yaj21"
+##### 해석 기준 및 주의사항
+- 본 실험은 실제 운영 트래픽이 아닌 **generator 기반 synthetic MCP-like traffic**을 사용합니다.
+- `latency_ns`는 userspace가 inspect event를 수신한 시점(`recv_ts_ns`)부터 WASM 검사 완료 시점(`done_ts_ns`)까지의 차이입니다.
+- 따라서 본 값은 **PoC 수준의 L7 검사 지연 시간**을 의미하며, 전체 네트워크 왕복 지연 시간(RTT)이나 제품 수준 end-to-end latency를 직접 의미하지 않습니다.
+- `label=malicious` 샘플에 대해 `verdict`가 `DROP` 또는 `ALERT`이면 탐지된 것으로 간주합니다.
+- `INSPECT_K`를 1, 4, 8, 12, 16, 20 등으로 변경하면서 탐지율과 검사 지연 시간의 trade-off를 비교합니다.
+
+
 ### 4. 데이터 지표 매핑 (Metric Mapping)
 수집된 Raw 데이터와 논문 지표 간의 분석 방법입니다.
 

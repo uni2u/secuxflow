@@ -15,7 +15,10 @@ use plain::Plain;
 #[cfg(target_os = "linux")]
 use crate::xdp_filter_skel::*;
 #[cfg(target_os = "linux")]
-use libbpf_rs::{MapFlags, Map};
+use libbpf_rs::{MapFlags, PerfBufferBuilder};
+
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 #[cfg(target_os = "linux")]
 // IP 프로토콜 상수
@@ -368,6 +371,46 @@ impl XdpFilter {
             Ok(())
         }
     }
+
+    /// inspect_map에서 userspace로 올라온 raw packet event를 poll
+    pub fn poll_inspect_events<F>(&mut self, timeout_ms: u64, mut handler: F) -> Result<()>
+    where
+        F: FnMut(&[u8]),
+    {
+        if let Some(skel) = &mut self.skel {
+            let inspect_map = skel
+                .maps()
+                .inspect_map()
+                .map_err(|e| anyhow!("inspect_map 접근 실패: {}", e))?;
+
+            let samples = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
+            let samples_cb = samples.clone();
+
+            let mut perf = PerfBufferBuilder::new(inspect_map)
+                .sample_cb(move |_cpu: i32, data: &[u8]| {
+                    if let Ok(mut guard) = samples_cb.lock() {
+                        guard.push(data.to_vec());
+                    }
+                })
+            .lost_cb(|cpu: i32, count: u64| {
+                warn!("inspect_map lost events on CPU {}: {}", cpu, count);
+            })
+            .build()
+            .map_err(|e| anyhow!("inspect_map perf buffer 생성 실패: {}", e))?;
+        perf.poll(Duration::from_millis(timeout_ms))
+            .map_err(|e| anyhow!("inspect_map poll 실패: {}", e))?;
+        
+        let drained = {
+            let mut guard = samples.lock().unwrap();
+            std::mem::take(&mut *guard)
+        };
+
+        for sample in drained {
+            handler(&sample);
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(target_os = "linux")]
