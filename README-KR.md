@@ -85,8 +85,6 @@ benchmark_results/experiment_b_inspection.csv
 ```
 
 #### 수동 검증 방법
-```md id="2vrz7b"
-##### 실시간 탐지율 수동 검증
 generator trace의 `label`을 ground truth로 사용하고, inspection 로그의 `verdict`를 기준으로 탐지 여부를 판단합니다.
 
 ```bash
@@ -130,16 +128,11 @@ END {
 ```
 
 #### 해석기준
-위 수동 검증 블록 **바로 아래**에 아래 설명을 넣어 주세요.
-
-```md id="4yaj21"
-##### 해석 기준 및 주의사항
 - 본 실험은 실제 운영 트래픽이 아닌 **generator 기반 synthetic MCP-like traffic**을 사용합니다.
 - `latency_ns`는 userspace가 inspect event를 수신한 시점(`recv_ts_ns`)부터 WASM 검사 완료 시점(`done_ts_ns`)까지의 차이입니다.
 - 따라서 본 값은 **PoC 수준의 L7 검사 지연 시간**을 의미하며, 전체 네트워크 왕복 지연 시간(RTT)이나 제품 수준 end-to-end latency를 직접 의미하지 않습니다.
 - `label=malicious` 샘플에 대해 `verdict`가 `DROP` 또는 `ALERT`이면 탐지된 것으로 간주합니다.
 - `INSPECT_K`를 1, 4, 8, 12, 16, 20 등으로 변경하면서 탐지율과 검사 지연 시간의 trade-off를 비교합니다.
-```
 
 ### 4. 데이터 지표 매핑 (Metric Mapping)
 수집된 Raw 데이터와 논문 지표 간의 분석 방법입니다.
