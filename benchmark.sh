@@ -90,7 +90,8 @@ test_secuxflow() {
   echo "SecuXFlow 테스트 시작..."
   
   # SecuXFlow 시작
-  ./target/release/secuxflow > "$RESULTS_DIR/secuxflow_output.log" 2>&1 &
+  SECUXFLOW_METRICS_FILE="$RESULTS_DIR/metrics_secuxflow.csv" \
+    ./target/release/secuxflow --iface "$INTERFACE" run > "$RESULTS_DIR/secuxflow_output.log" 2>&1 &
   SECUXFLOW_PID=$!
   sleep 5  # 초기화 대기
   
@@ -118,8 +119,12 @@ analyze_results() {
   echo "=== CPU 사용량 비교 ===" > "$RESULTS_DIR/comparison.txt"
   echo "Suricata:" >> "$RESULTS_DIR/comparison.txt"
   awk '/Average:/ {print $3}' "$RESULTS_DIR/suricata_pidstat.log" | tail -1 >> "$RESULTS_DIR/comparison.txt"
-  echo "SecuXFlow:" >> "$RESULTS_DIR/comparison.txt"
-  awk '/Average:/ {print $3}' "$RESULTS_DIR/secuxflow_pidstat.log" | tail -1 >> "$RESULTS_DIR/comparison.txt"
+  echo "SecuXFlow (metrics_secuxflow.csv 평균 cpu_usage_pct):" >> "$RESULTS_DIR/comparison.txt"
+  if [ -f "$RESULTS_DIR/metrics_secuxflow.csv" ]; then
+    awk -F',' 'NR>1 {sum+=$5; n++} END { if (n>0) printf "%.3f\n", sum/n; else print "N/A" }' "$RESULTS_DIR/metrics_secuxflow.csv" >> "$RESULTS_DIR/comparison.txt"
+  else
+    awk '/Average:/ {print $3}' "$RESULTS_DIR/secuxflow_pidstat.log" | tail -1 >> "$RESULTS_DIR/comparison.txt"
+  fi
   
   # 메모리 사용량 분석
   echo "=== 메모리 사용량 비교 ===" >> "$RESULTS_DIR/comparison.txt"
@@ -127,8 +132,20 @@ analyze_results() {
   awk '/Average:/ {print $12}' "$RESULTS_DIR/suricata_pidstat.log" | tail -1 >> "$RESULTS_DIR/comparison.txt"
   echo "SecuXFlow:" >> "$RESULTS_DIR/comparison.txt"
   awk '/Average:/ {print $12}' "$RESULTS_DIR/secuxflow_pidstat.log" | tail -1 >> "$RESULTS_DIR/comparison.txt"
-  
-  # 추가 분석 (필요시)
+ 
+  echo "=== SecuXFlow 처리량(rx_kbps 평균) ===" >> "$RESULTS_DIR/comparison.txt"
+  if [ -f "$RESULTS_DIR/metrics_secuxflow.csv" ]; then
+    awk -F',' 'NR>1 {sum+=$4; n++} END { if (n>0) printf "%.3f kbps\n", sum/n; else print "N/A" }' "$RESULTS_DIR/metrics_secuxflow.csv" >> "$RESULTS_DIR/comparison.txt"
+  else
+    echo "N/A" >> "$RESULTS_DIR/comparison.txt"
+  fi
+
+  echo "=== SecuXFlow 메모리 RSS(memory_rss_kb 평균) ===" >> "$RESULTS_DIR/comparison.txt"
+  if [ -f "$RESULTS_DIR/metrics_secuxflow.csv" ]; then
+    awk -F',' 'NR>1 {sum+=$6; n++} END { if (n>0) printf "%.0f KB\n", sum/n; else print "N/A" }' "$RESULTS_DIR/metrics_secuxflow.csv" >> "$RESULTS_DIR/comparison.txt"
+  else
+    echo "N/A" >> "$RESULTS_DIR/comparison.txt"
+  fi 
   
   echo "결과가 $RESULTS_DIR/comparison.txt에 저장되었습니다."
 }

@@ -21,6 +21,7 @@ if [ -f /etc/debian_version ]; then
     sudo apt install -y build-essential \
                         llvm \
                         clang \
+                        libbpf-dev \
                         libelf-dev \
                         zlib1g-dev \
                         linux-headers-$(uname -r) \
@@ -33,7 +34,7 @@ if [ -f /etc/debian_version ]; then
     fi
 else
     echo -e "${YELLOW}Ubuntu/Debian 이외의 시스템입니다. 수동으로 필요한 패키지를 설치해주세요.${NC}"
-    echo "필요한 패키지: build-essential, llvm, clang, libelf-dev, zlib1g-dev, linux-headers, bpftool, wabt"
+    echo "필요한 패키지: build-essential, llvm, clang, libbpf-dev, libelf-dev, zlib1g-dev, linux-headers, bpftool, wabt"
 fi
 
 # Rust 설치 확인
@@ -69,8 +70,8 @@ if [ $? -eq 0 ]; then
     echo -e "${GREEN}빌드 성공! 개발 환경이 준비되었습니다.${NC}"
     echo ""
     echo -e "${GREEN}SecuXFlow 실행 방법:${NC}"
-    echo -e "  ${YELLOW}개발 모드:${NC} cargo run"
-    echo -e "  ${YELLOW}릴리스 모드:${NC} cargo run --release"
+    echo -e "  ${YELLOW}개발 모드:${NC} cargo run -- --iface <NIC_NAME> run"
+    echo -e "  ${YELLOW}릴리스 모드:${NC} cargo run --release -- --iface <NIC_NAME> run"
     echo ""
     echo -e "${GREEN}추가 명령어:${NC}"
     echo -e "  ${YELLOW}테스트 실행:${NC} cargo test"

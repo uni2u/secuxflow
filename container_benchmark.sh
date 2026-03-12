@@ -202,7 +202,8 @@ run_secuxflow() {
     pkill -f "$SECUXFLOW_PATH" 2>/dev/null || true
     
     # SecuXFlow 실행 (백그라운드로)
-    $SECUXFLOW_PATH -i "$INTERFACE" > "${output_dir}/secuxflow.log" 2>&1 &
+    SECUXFLOW_METRICS_FILE="${output_dir}/metrics_secuxflow.csv" \
+        $SECUXFLOW_PATH -i "$INTERFACE" run > "${output_dir}/secuxflow.log" 2>&1 &
     SECUXFLOW_PID=$!
     
     # 프로세스가 시작되었는지 확인
@@ -412,15 +413,20 @@ collect_secuxflow_results() {
     
     # SecuXFlow 로그 파일 확인
     if [ -f "${output_dir}/secuxflow.log" ]; then
-        # 로그에서 성능 지표 추출
-        log_info "로그 분석 중..."
-        grep "packets processed" "${output_dir}/secuxflow.log" | tail -1 > "${output_dir}/packet_stats.txt"
-        grep "alerts generated" "${output_dir}/secuxflow.log" | tail -1 > "${output_dir}/alert_stats.txt"
-        grep "CPU usage" "${output_dir}/secuxflow.log" | tail -1 > "${output_dir}/cpu_usage.txt"
-        grep "Memory usage" "${output_dir}/secuxflow.log" | tail -1 > "${output_dir}/memory_usage.txt"
+        log_info "SecuXFlow 로그 파일 존재 확인 완료"
     fi
     
-    # top 로그 분석
+    if [ -f "${output_dir}/metrics_secuxflow.csv" ]; then
+        log_info "CSV 지표 분석 중..."
+        awk -F',' 'NR>1 {sum+=$5; n++} END { if (n>0) printf "%.3f%%\n", sum/n; else print "N/A" }' "${output_dir}/metrics_secuxflow.csv" > "${output_dir}/cpu_usage.txt"
+        awk -F',' 'NR>1 {sum+=$6; n++} END { if (n>0) printf "%.0f KB\n", sum/n; else print "N/A" }' "${output_dir}/metrics_secuxflow.csv" > "${output_dir}/memory_usage.txt"
+        awk -F',' 'NR>1 {sum+=$4; n++} END { if (n>0) printf "%.3f kbps\n", sum/n; else print "N/A" }' "${output_dir}/metrics_secuxflow.csv" > "${output_dir}/throughput_stats.txt"
+        awk -F',' 'END { if (NR > 1) print NR-1; else print 0 }' "${output_dir}/metrics_secuxflow.csv" > "${output_dir}/packet_stats.txt"
+    else
+        log_info "metrics_secuxflow.csv가 없어 CSV 분석을 건너뜁니다."
+    fi
+    
+    # top 로그 분석 (보조 정보)
     if [ -f "${output_dir}/top.log" ]; then
         log_info "프로세스 통계 분석 중..."
         grep "$SECUXFLOW_PATH" "${output_dir}/top.log" | \
@@ -457,11 +463,15 @@ compare_results() {
     if [ -f "${test_dir}/suricata/avg_memory_usage.txt" ]; then
         echo "평균 메모리 사용량: $(cat ${test_dir}/suricata/avg_memory_usage.txt)" >> "$summary_file"
     fi
-    if [ -f "${test_dir}/suricata/packet_stats.txt" ]; then
-        echo "처리된 패킷: $(cat ${test_dir}/suricata/packet_stats.txt)" >> "$summary_file"
+
+    if [ -f "${test_dir}/secuxflow/packet_stats.txt" ]; then
+        echo "처리된 패킷: $(cat ${test_dir}/secuxflow/packet_stats.txt)" >> "$summary_file"
     fi
-    if [ -f "${test_dir}/suricata/alert_count.txt" ]; then
-        echo "생성된 알림: $(cat ${test_dir}/suricata/alert_count.txt)" >> "$summary_file"
+    if [ -f "${test_dir}/secuxflow/throughput_stats.txt" ]; then
+        echo "평균 처리량: $(cat ${test_dir}/secuxflow/throughput_stats.txt)" >> "$summary_file"
+    fi
+    if [ -f "${test_dir}/secuxflow/alert_stats.txt" ]; then
+        echo "생성된 알림: $(cat ${test_dir}/secuxflow/alert_stats.txt)" >> "$summary_file"
     fi
     
     echo "" >> "$summary_file"

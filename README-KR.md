@@ -18,7 +18,7 @@ sudo docker pull jasonish/suricata:latest
 sudo docker pull ubuntu:22.04
 
 # Ubuntu 패키지 미리 설치
-sudo apt update && sudo apt install -y build-essential llvm clang libelf-dev zlib1g-dev bpftool linux-headers-$(uname -r) wabt
+sudo apt update && sudo apt install -y build-essential llvm clang libbpf-dev libelf-dev zlib1g-dev bpftool linux-headers-$(uname -r) wabt
 ```
 
 ### 2. 빌드 절차 (Build Process)
@@ -33,24 +33,31 @@ cargo build --release
 ```
 
 ### 3. 실험별 실행 및 제어 (Experiment Control)
+아래의 실험 A(성능 비교)와 실험 B(MCP 검증)는 **동일 엔진을 사용하는 별도 시나리오**이며, 한 번에 섞어서 수행하지 않습니다.
 엔진은 `INSPECT_K` 환경 변수를 통해 검사 깊이($k$값)를 동적으로 조절합니다.
 
-#### A. 인프라 성능 및 자원 효율성 (Table 1, Fig 2)
+#### A. 인프라 성능 및 자원 효율성 (Table 1, Fig 2, Suricata 비교 파트)
 - 목표: 5 Gbps Baseline 부하 상황에서의 안정성 및 자원 효율성 측정.
 - 실행:
 
 ```bash
-sudo INSPECT_K=12 WASM_MODULE=wasm_modules/mcp_inspector.wasm ./target/release/secuxflow --iface <NIC_NAME>
+sudo INSPECT_K=12 WASM_MODULE=wasm_modules/mcp_inspector.wasm ./target/release/secuxflow --iface <NIC_NAME> run
 ```
 
-- 데이터 확인: `benchmark_results/` 내 생성된 CSV의 `cpu_usage_pct`와 `rx_kbps` 확인.
+- 위 명령은 엔진을 상주 실행하는 용도입니다. `Ctrl+C`로 종료합니다.
+- `benchmark.sh` 및 `container_benchmark.sh`는 `SECUXFLOW_METRICS_FILE` 환경변수로 각 실행 디렉토리 안의 `metrics_secuxflow.csv`를 생성합니다.
+- 데이터 확인: `metrics_secuxflow.csv`의 `cpu_usage_pct`, `rx_kbps`, `memory_rss_kb` 열 확인.
 
-#### B. 보안 정확도 및 지연 시간 모델 (Fig 3, Table 2)
+#### B. 보안 정확도 및 지연 시간 모델 (Fig 3, Table 2, MCP 검증 파트)
 - 목표: $k$값 변화에 따른 탐지율(Accuracy)과 지연 시간($E[L]$)의 상관관계 증명.
 - 실행: `INSPECT_K`값을 1, 4, 8, 12, 16, 20으로 가변 적용하여 반복 테스트 수행.
+- 본 실험은 Suricata 비교 파트와 분리해서 수행하며, 엔진 구동 후 **다른 터미널에서** MCP 트래픽을 주입합니다.
 
 ```bash
-sudo INSPECT_K=<VALUE> ./target/release/secuxflow --iface <NIC_NAME>
+sudo INSPECT_K=<VALUE> ./target/release/secuxflow --iface <NIC_NAME> run
+```
+
+```bash
 # 다른 터미널에서 MCP 공격 트래픽 주입
 sudo python3 scripts/mcp_generator.py --iface <NIC_NAME> --dst-ip <TARGET_IP>
 ```
