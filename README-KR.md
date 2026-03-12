@@ -139,7 +139,7 @@ END {
 - 따라서 본 값은 **PoC 수준의 L7 검사 지연 시간**을 의미하며, 전체 네트워크 왕복 지연 시간(RTT)이나 제품 수준 end-to-end latency를 직접 의미하지 않습니다.
 - `label=malicious` 샘플에 대해 `verdict`가 `DROP` 또는 `ALERT`이면 탐지된 것으로 간주합니다.
 - `INSPECT_K`를 1, 4, 8, 12, 16, 20 등으로 변경하면서 탐지율과 검사 지연 시간의 trade-off를 비교합니다.
-
+```
 
 ### 4. 데이터 지표 매핑 (Metric Mapping)
 수집된 Raw 데이터와 논문 지표 간의 분석 방법입니다.
