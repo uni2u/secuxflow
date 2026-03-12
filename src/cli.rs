@@ -89,7 +89,7 @@ enum RuleAction {
 }
 
 #[cfg(target_os = "linux")]
-pub fn run(xdp_filter: Option<Arc<Mutex<XdpFilter>>>, wasm_inspector: Option<Arc<WasmInspector>>i,) -> Result<()> {
+pub fn run(xdp_filter: Option<Arc<Mutex<XdpFilter>>>, wasm_inspector: Option<Arc<WasmInspector>>,) -> Result<()> {
     let cli = Cli::parse();
 
     // 인터페이스 옵션 처리
